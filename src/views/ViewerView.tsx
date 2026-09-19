@@ -1,24 +1,31 @@
 import Header from '../components/Header'
+import CategorySection from '../components/CategorySection'
 import { useApp } from '../context/AppContext'
 import { formatEuro, remainingLabel, statusMeta } from '../lib/format'
+import { groupByCategory } from '../lib/grouping'
 import type { Product } from '../lib/types'
 
 export default function ViewerView() {
   const { state, loading } = useApp()
+  const groups = state ? groupByCategory(state.products, state.categories) : []
 
   return (
     <div className="min-h-dvh">
       <Header title="Inventario" />
-      <main className="mx-auto max-w-3xl px-4 py-4">
+      <main className="mx-auto max-w-6xl px-4 py-4">
         {loading && !state && <p className="text-center text-slate-400">Caricamento…</p>}
         {state && state.products.length === 0 && (
           <p className="text-center text-slate-400">Nessun prodotto configurato.</p>
         )}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {state?.products.map((p) => (
-            <ViewerCard key={p.id} product={p} />
-          ))}
-        </div>
+        {groups.map((g) => (
+          <CategorySection key={g.category?.id ?? 'none'} title={g.category?.name ?? 'Senza categoria'}>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {g.products.map((p) => (
+                <ViewerCard key={p.id} product={p} />
+              ))}
+            </div>
+          </CategorySection>
+        ))}
       </main>
     </div>
   )

@@ -65,6 +65,7 @@ export async function upsertProduct(
     price: number
     low_stock_threshold: number
     is_sold_out: boolean
+    category_id: number | null
     sort_order?: number
     recipe: { ingredient_id: number; qty_required: number }[]
   }
@@ -76,10 +77,49 @@ export async function upsertProduct(
     p_price: prod.price,
     p_threshold: prod.low_stock_threshold,
     p_is_sold_out: prod.is_sold_out,
+    p_category_id: prod.category_id,
     p_sort_order: prod.sort_order ?? 0,
     p_recipe: prod.recipe,
   })
   if (error) fail(error, 'Impossibile salvare il prodotto')
+  return data as AppState
+}
+
+export async function upsertCategory(
+  pin: string,
+  cat: { id?: number; name: string; sort_order?: number }
+): Promise<AppState> {
+  const { data, error } = await supabase.rpc('admin_upsert_category', {
+    p_pin: pin,
+    p_id: cat.id ?? null,
+    p_name: cat.name,
+    p_sort_order: cat.sort_order ?? 0,
+  })
+  if (error) fail(error, 'Impossibile salvare la categoria')
+  return data as AppState
+}
+
+export async function deleteCategory(pin: string, id: number): Promise<AppState> {
+  const { data, error } = await supabase.rpc('admin_delete_category', {
+    p_pin: pin,
+    p_id: id,
+  })
+  if (error) fail(error, 'Impossibile eliminare la categoria')
+  return data as AppState
+}
+
+/** Riordina in base alla posizione degli id. kind: category | product | ingredient */
+export async function setOrder(
+  pin: string,
+  kind: 'category' | 'product' | 'ingredient',
+  ids: number[]
+): Promise<AppState> {
+  const { data, error } = await supabase.rpc('admin_set_order', {
+    p_pin: pin,
+    p_kind: kind,
+    p_ids: ids,
+  })
+  if (error) fail(error, 'Impossibile riordinare')
   return data as AppState
 }
 

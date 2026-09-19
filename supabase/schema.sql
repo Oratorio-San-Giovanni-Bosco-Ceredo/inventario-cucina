@@ -17,12 +17,20 @@ create table if not exists ingredients (
   created_at  timestamptz not null default now()
 );
 
+create table if not exists categories (
+  id         bigint generated always as identity primary key,
+  name       text not null,
+  sort_order int  not null default 0,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists products (
   id                  bigint generated always as identity primary key,
   name                text    not null,
   price               numeric not null default 0,
   low_stock_threshold numeric not null default 0,
   is_sold_out         boolean not null default false,
+  category_id         bigint  references categories(id) on delete set null,
   sort_order          int     not null default 0,
   created_at          timestamptz not null default now()
 );
@@ -41,6 +49,7 @@ create table if not exists app_pins (
 
 -- ---------- Sicurezza: nessun accesso diretto alle tabelle ----------
 -- Tutto passa dalle funzioni qui sotto, che verificano il PIN.
+alter table categories   enable row level security;
 alter table ingredients  enable row level security;
 alter table products     enable row level security;
 alter table recipe_items enable row level security;
@@ -101,6 +110,14 @@ begin
 
   select json_build_object(
     'role', v_role,
+    'categories', coalesce((
+      select json_agg(json_build_object(
+        'id', c.id,
+        'name', c.name,
+        'sort_order', c.sort_order
+      ) order by c.sort_order, c.name)
+      from categories c
+    ), '[]'::json),
     'ingredients', coalesce((
       select json_agg(json_build_object(
         'id', i.id,
@@ -124,6 +141,7 @@ begin
             'low_stock_threshold', pr.low_stock_threshold,
             'is_sold_out', pr.is_sold_out,
             'sort_order', pr.sort_order,
+            'category_id', pr.category_id,
             'recipe', coalesce((
               select json_agg(json_build_object(
                 'ingredient_id', ri.ingredient_id,
@@ -267,7 +285,8 @@ $$;
 
 create or replace function admin_upsert_product(
   p_pin text, p_id bigint, p_name text, p_price numeric,
-  p_threshold numeric, p_is_sold_out boolean, p_sort_order int, p_recipe jsonb
+  p_threshold numeric, p_is_sold_out boolean, p_category_id bigint,
+  p_sort_order int, p_recipe jsonb
 )
 returns json
 language plpgsql security definer set search_path = public
@@ -280,13 +299,14 @@ begin
   end if;
 
   if p_id is null then
-    insert into products(name, price, low_stock_threshold, is_sold_out, sort_order)
-    values (p_name, p_price, p_threshold, p_is_sold_out, coalesce(p_sort_order, 0))
+    insert into products(name, price, low_stock_threshold, is_sold_out, category_id, sort_order)
+    values (p_name, p_price, p_threshold, p_is_sold_out, p_category_id, coalesce(p_sort_order, 0))
     returning id into v_id;
   else
     update products set
       name = p_name, price = p_price, low_stock_threshold = p_threshold,
-      is_sold_out = p_is_sold_out, sort_order = coalesce(p_sort_order, 0)
+      is_sold_out = p_is_sold_out, category_id = p_category_id,
+      sort_order = coalesce(p_sort_order, 0)
     where id = p_id;
     v_id := p_id;
   end if;
@@ -309,6 +329,69 @@ as $$
 begin
   perform _require_admin(p_pin);
   delete from products where id = p_id;
+  return get_state(p_pin);
+end;
+$$;
+
+-- ---------- API: gestione categorie e riordino (admin) ----------
+
+create or replace function admin_upsert_category(
+  p_pin text, p_id bigint, p_name text, p_sort_order int
+)
+returns json
+language plpgsql security definer set search_path = public
+as $$
+begin
+  perform _require_admin(p_pin);
+  if coalesce(trim(p_name), '') = '' then
+    raise exception 'Il nome è obbligatorio';
+  end if;
+  if p_id is null then
+    insert into categories(name, sort_order) values (p_name, coalesce(p_sort_order, 0));
+  else
+    update categories set name = p_name, sort_order = coalesce(p_sort_order, 0)
+    where id = p_id;
+  end if;
+  return get_state(p_pin);
+end;
+$$;
+
+create or replace function admin_delete_category(p_pin text, p_id bigint)
+returns json
+language plpgsql security definer set search_path = public
+as $$
+begin
+  perform _require_admin(p_pin);
+  delete from categories where id = p_id;  -- i prodotti restano (category_id -> null)
+  return get_state(p_pin);
+end;
+$$;
+
+-- Riordino: sort_order = posizione nell'array. kind: category | product | ingredient
+create or replace function admin_set_order(p_pin text, p_kind text, p_ids jsonb)
+returns json
+language plpgsql security definer set search_path = public
+as $$
+begin
+  perform _require_admin(p_pin);
+  if p_kind = 'category' then
+    update categories c set sort_order = x.ord
+    from (select value::bigint as id, (ordinality - 1) as ord
+          from jsonb_array_elements_text(p_ids) with ordinality) x
+    where c.id = x.id;
+  elsif p_kind = 'product' then
+    update products p set sort_order = x.ord
+    from (select value::bigint as id, (ordinality - 1) as ord
+          from jsonb_array_elements_text(p_ids) with ordinality) x
+    where p.id = x.id;
+  elsif p_kind = 'ingredient' then
+    update ingredients i set sort_order = x.ord
+    from (select value::bigint as id, (ordinality - 1) as ord
+          from jsonb_array_elements_text(p_ids) with ordinality) x
+    where i.id = x.id;
+  else
+    raise exception 'Tipo non valido: %', p_kind;
+  end if;
   return get_state(p_pin);
 end;
 $$;
@@ -343,8 +426,11 @@ grant execute on function get_state(text)                                       
 grant execute on function confirm_order(text, jsonb)                              to anon, authenticated;
 grant execute on function admin_upsert_ingredient(text, bigint, text, numeric, boolean, int) to anon, authenticated;
 grant execute on function admin_delete_ingredient(text, bigint)                   to anon, authenticated;
-grant execute on function admin_upsert_product(text, bigint, text, numeric, numeric, boolean, int, jsonb) to anon, authenticated;
+grant execute on function admin_upsert_product(text, bigint, text, numeric, numeric, boolean, bigint, int, jsonb) to anon, authenticated;
 grant execute on function admin_delete_product(text, bigint)                      to anon, authenticated;
+grant execute on function admin_upsert_category(text, bigint, text, int)          to anon, authenticated;
+grant execute on function admin_delete_category(text, bigint)                     to anon, authenticated;
+grant execute on function admin_set_order(text, text, jsonb)                       to anon, authenticated;
 grant execute on function admin_set_pin(text, text, text)                         to anon, authenticated;
 
 -- ---------- PIN predefiniti (CAMBIALI dopo il primo accesso!) ----------
@@ -360,21 +446,24 @@ do $$
 declare
   v_pane bigint; v_sal bigint; v_ham bigint; v_pep bigint; v_cip bigint;
   v_p1 bigint; v_p2 bigint; v_p3 bigint;
+  v_cat bigint;
 begin
   if (select count(*) from products) = 0 and (select count(*) from ingredients) = 0 then
+    insert into categories(name, sort_order) values ('Panini', 1) returning id into v_cat;
+
     insert into ingredients(name, quantity, is_infinite, sort_order) values ('Pane', 0, true, 1) returning id into v_pane;
     insert into ingredients(name, quantity, is_infinite, sort_order) values ('Salamella', 100, false, 2) returning id into v_sal;
     insert into ingredients(name, quantity, is_infinite, sort_order) values ('Hamburger', 50, false, 3) returning id into v_ham;
     insert into ingredients(name, quantity, is_infinite, sort_order) values ('Peperoni', 200, false, 4) returning id into v_pep;
     insert into ingredients(name, quantity, is_infinite, sort_order) values ('Cipolla', 200, false, 5) returning id into v_cip;
 
-    insert into products(name, price, low_stock_threshold, sort_order) values ('Panino salamella', 3.50, 10, 1) returning id into v_p1;
+    insert into products(name, price, low_stock_threshold, category_id, sort_order) values ('Panino salamella', 3.50, 10, v_cat, 1) returning id into v_p1;
     insert into recipe_items values (v_p1, v_pane, 1), (v_p1, v_sal, 1);
 
-    insert into products(name, price, low_stock_threshold, sort_order) values ('Hamburger', 4.00, 10, 2) returning id into v_p2;
+    insert into products(name, price, low_stock_threshold, category_id, sort_order) values ('Hamburger', 4.00, 10, v_cat, 2) returning id into v_p2;
     insert into recipe_items values (v_p2, v_pane, 1), (v_p2, v_ham, 1);
 
-    insert into products(name, price, low_stock_threshold, sort_order) values ('Panino salamella, peperoni e cipolla', 4.50, 10, 3) returning id into v_p3;
+    insert into products(name, price, low_stock_threshold, category_id, sort_order) values ('Panino salamella, peperoni e cipolla', 4.50, 10, v_cat, 3) returning id into v_p3;
     insert into recipe_items values (v_p3, v_pane, 1), (v_p3, v_sal, 1), (v_p3, v_pep, 2), (v_p3, v_cip, 1);
   end if;
 end $$;

@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import CategorySection from '../../components/CategorySection'
 import { useApp } from '../../context/AppContext'
-import { deleteProduct, upsertProduct } from '../../lib/api'
+import { deleteProduct, setOrder, upsertProduct } from '../../lib/api'
 import { formatEuro } from '../../lib/format'
-import type { Ingredient, Product, RecipeItem } from '../../lib/types'
+import { groupByCategory } from '../../lib/grouping'
+import type { AppState, Category, Ingredient, Product, RecipeItem } from '../../lib/types'
 
 export default function ProductsAdmin() {
   const { state, session, applyState } = useApp()
@@ -11,15 +13,31 @@ export default function ProductsAdmin() {
 
   const products = state?.products ?? []
   const ingredients = state?.ingredients ?? []
+  const categories = state?.categories ?? []
+  const groups = groupByCategory(products, categories)
 
-  const remove = async (p: Product) => {
-    if (!session) return
-    if (!confirm(`Eliminare il prodotto "${p.name}"?`)) return
+  const run = async (fn: () => Promise<AppState>) => {
     try {
-      applyState(await deleteProduct(session.pin, p.id))
+      applyState(await fn())
+      setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Errore')
     }
+  }
+
+  const move = (groupProducts: Product[], index: number, dir: -1 | 1) => {
+    if (!session) return
+    const next = [...groupProducts]
+    const j = index + dir
+    if (j < 0 || j >= next.length) return
+    ;[next[index], next[j]] = [next[j], next[index]]
+    run(() => setOrder(session.pin, 'product', next.map((p) => p.id)))
+  }
+
+  const remove = (p: Product) => {
+    if (!session) return
+    if (!confirm(`Eliminare il prodotto "${p.name}"?`)) return
+    run(() => deleteProduct(session.pin, p.id))
   }
 
   if (ingredients.length === 0) {
@@ -35,7 +53,7 @@ export default function ProductsAdmin() {
       {error && <p className="rounded bg-red-100 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {editing === 'new' ? (
-        <ProductEditor ingredients={ingredients} onClose={() => setEditing(null)} />
+        <ProductEditor ingredients={ingredients} categories={categories} onClose={() => setEditing(null)} />
       ) : (
         <button
           type="button"
@@ -46,25 +64,51 @@ export default function ProductsAdmin() {
         </button>
       )}
 
-      <ul className="space-y-2">
-        {products.map((p) =>
-          editing !== 'new' && editing?.id === p.id ? (
-            <li key={p.id}>
-              <ProductEditor product={p} ingredients={ingredients} onClose={() => setEditing(null)} />
-            </li>
-          ) : (
-            <li key={p.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-slate-800">
-                    {p.name} {p.is_sold_out && <span className="text-red-600">· esaurito</span>}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {formatEuro(p.price)} &middot; soglia {p.low_stock_threshold} &middot;{' '}
-                    {p.recipe.length} ingredienti
-                  </p>
-                </div>
-                <div className="flex gap-2">
+      {groups.map((g) => (
+        <CategorySection key={g.category?.id ?? 'none'} title={g.category?.name ?? 'Senza categoria'}>
+          <ul className="space-y-2">
+            {g.products.map((p, i) =>
+              editing !== 'new' && editing?.id === p.id ? (
+                <li key={p.id}>
+                  <ProductEditor
+                    product={p}
+                    ingredients={ingredients}
+                    categories={categories}
+                    onClose={() => setEditing(null)}
+                  />
+                </li>
+              ) : (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3"
+                >
+                  <div className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => move(g.products, i, -1)}
+                      disabled={i === 0}
+                      className="px-1 text-slate-400 disabled:opacity-20"
+                    >
+                      &#9650;
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => move(g.products, i, 1)}
+                      disabled={i === g.products.length - 1}
+                      className="px-1 text-slate-400 disabled:opacity-20"
+                    >
+                      &#9660;
+                    </button>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-slate-800">
+                      {p.name} {p.is_sold_out && <span className="text-red-600">· esaurito</span>}
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      {formatEuro(p.price)} &middot; soglia {p.low_stock_threshold} &middot;{' '}
+                      {p.recipe.length} ingredienti
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setEditing(p)}
@@ -79,12 +123,12 @@ export default function ProductsAdmin() {
                   >
                     Elimina
                   </button>
-                </div>
-              </div>
-            </li>
-          )
-        )}
-      </ul>
+                </li>
+              )
+            )}
+          </ul>
+        </CategorySection>
+      ))}
     </div>
   )
 }
@@ -92,10 +136,12 @@ export default function ProductsAdmin() {
 function ProductEditor({
   product,
   ingredients,
+  categories,
   onClose,
 }: {
   product?: Product
   ingredients: Ingredient[]
+  categories: Category[]
   onClose: () => void
 }) {
   const { session, applyState } = useApp()
@@ -103,24 +149,17 @@ function ProductEditor({
   const [price, setPrice] = useState(String(product?.price ?? 0))
   const [threshold, setThreshold] = useState(String(product?.low_stock_threshold ?? 0))
   const [soldOut, setSoldOut] = useState(product?.is_sold_out ?? false)
+  const [categoryId, setCategoryId] = useState<number | null>(product?.category_id ?? null)
   const [recipe, setRecipe] = useState<RecipeItem[]>(product?.recipe ?? [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const available = ingredients.filter(
-    (i) => !recipe.some((r) => r.ingredient_id === i.id)
-  )
+  const available = ingredients.filter((i) => !recipe.some((r) => r.ingredient_id === i.id))
 
-  const addIngredient = (id: number) => {
-    setRecipe((r) => [...r, { ingredient_id: id, qty_required: 1 }])
-  }
-  const updateQty = (id: number, qty: number) => {
+  const addIngredient = (id: number) => setRecipe((r) => [...r, { ingredient_id: id, qty_required: 1 }])
+  const updateQty = (id: number, qty: number) =>
     setRecipe((r) => r.map((it) => (it.ingredient_id === id ? { ...it, qty_required: qty } : it)))
-  }
-  const removeItem = (id: number) => {
-    setRecipe((r) => r.filter((it) => it.ingredient_id !== id))
-  }
-
+  const removeItem = (id: number) => setRecipe((r) => r.filter((it) => it.ingredient_id !== id))
   const nameOf = (id: number) => ingredients.find((i) => i.id === id)?.name ?? '?'
 
   const save = async () => {
@@ -137,6 +176,7 @@ function ProductEditor({
         price: Number(price) || 0,
         low_stock_threshold: Number(threshold) || 0,
         is_sold_out: soldOut,
+        category_id: categoryId,
         sort_order: product?.sort_order ?? 0,
         recipe: recipe.map((r) => ({
           ingredient_id: r.ingredient_id,
@@ -160,6 +200,23 @@ function ProductEditor({
         placeholder="Nome prodotto"
         className="w-full rounded-lg border border-slate-300 px-3 py-2"
       />
+
+      <div>
+        <label className="text-sm text-slate-600">Categoria</label>
+        <select
+          value={categoryId ?? ''}
+          onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : null)}
+          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+        >
+          <option value="">Senza categoria</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-sm text-slate-600">Prezzo (€)</label>

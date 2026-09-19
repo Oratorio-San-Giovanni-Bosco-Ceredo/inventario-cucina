@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import Header from '../components/Header'
+import CategoriesAdmin from './admin/CategoriesAdmin'
 import IngredientsAdmin from './admin/IngredientsAdmin'
 import ProductsAdmin from './admin/ProductsAdmin'
 import SettingsAdmin from './admin/SettingsAdmin'
 
-type Tab = 'products' | 'ingredients' | 'settings'
+type Tab = 'products' | 'categories' | 'ingredients' | 'settings'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'products', label: 'Prodotti' },
+  { id: 'categories', label: 'Categorie' },
   { id: 'ingredients', label: 'Ingredienti' },
   { id: 'settings', label: 'PIN' },
 ]
@@ -38,6 +40,7 @@ export default function AdminView() {
       </div>
       <main className="mx-auto max-w-3xl px-4 py-4">
         {tab === 'products' && <ProductsAdmin />}
+        {tab === 'categories' && <CategoriesAdmin />}
         {tab === 'ingredients' && <IngredientsAdmin />}
         {tab === 'settings' && <SettingsAdmin />}
       </main>

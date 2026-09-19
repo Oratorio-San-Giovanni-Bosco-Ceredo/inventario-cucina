@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import Header from '../components/Header'
+import CategorySection from '../components/CategorySection'
 import { useApp } from '../context/AppContext'
 import { confirmOrder } from '../lib/api'
 import { formatEuro, remainingLabel, statusMeta } from '../lib/format'
+import { groupByCategory } from '../lib/grouping'
 import type { Product } from '../lib/types'
 
 export default function OrderView() {
@@ -12,6 +14,7 @@ export default function OrderView() {
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null)
 
   const products = state?.products ?? []
+  const groups = state ? groupByCategory(products, state.categories) : []
 
   const setQty = (product: Product, next: number) => {
     const max = product.remaining // null = illimitato
@@ -65,7 +68,7 @@ export default function OrderView() {
   return (
     <div className="min-h-dvh pb-28">
       <Header title="Cassa" />
-      <main className="mx-auto max-w-3xl px-4 py-4">
+      <main className="mx-auto max-w-6xl px-4 py-4">
         {loading && !state && <p className="text-center text-slate-400">Caricamento…</p>}
         {message && (
           <p
@@ -76,20 +79,19 @@ export default function OrderView() {
             {message.text}
           </p>
         )}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {products.map((p) => (
-            <OrderCard
-              key={p.id}
-              product={p}
-              qty={order[p.id] ?? 0}
-              onChange={(n) => setQty(p, n)}
-            />
-          ))}
-        </div>
+        {groups.map((g) => (
+          <CategorySection key={g.category?.id ?? 'none'} title={g.category?.name ?? 'Senza categoria'}>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {g.products.map((p) => (
+                <OrderCard key={p.id} product={p} qty={order[p.id] ?? 0} onChange={(n) => setQty(p, n)} />
+              ))}
+            </div>
+          </CategorySection>
+        ))}
       </main>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
           <div className="flex-1">
             <p className="text-xs text-slate-500">
               {totalPieces} {totalPieces === 1 ? 'pezzo' : 'pezzi'}
@@ -135,40 +137,39 @@ function OrderCard({
 
   return (
     <div
-      className={`rounded-2xl border-2 bg-white p-4 shadow-sm ${meta.card} ${
+      className={`flex flex-col rounded-2xl border-2 bg-white p-4 shadow-sm ${meta.card} ${
         qty > 0 ? 'ring-2 ring-emerald-400' : ''
       }`}
     >
       <h2 className="text-base font-semibold leading-snug text-slate-800">{product.name}</h2>
-
-      <div className="mt-3 flex items-end justify-between gap-3">
+      <div className="mt-1 flex items-baseline justify-between gap-2">
         <p className="text-sm text-slate-500">
           {formatEuro(product.price)} &middot; rim. {remainingLabel(product)}
         </p>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onChange(qty - 1)}
-            disabled={disabled || qty === 0}
-            className="h-11 w-11 rounded-xl bg-slate-100 text-2xl font-bold text-slate-700 active:bg-slate-200 disabled:opacity-30"
-          >
-            &minus;
-          </button>
-          <span className="w-8 text-center text-xl font-bold tabular-nums">{qty}</span>
-          <button
-            type="button"
-            onClick={() => onChange(qty + 1)}
-            disabled={disabled || atMax}
-            className="h-11 w-11 rounded-xl bg-emerald-600 text-2xl font-bold text-white active:bg-emerald-700 disabled:opacity-30"
-          >
-            +
-          </button>
-        </div>
+        {product.status !== 'ok' && (
+          <span className={`text-xs font-medium ${meta.text}`}>{meta.label}</span>
+        )}
       </div>
 
-      {product.status !== 'ok' && (
-        <p className={`mt-2 text-xs font-medium ${meta.text}`}>{meta.label}</p>
-      )}
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => onChange(qty - 1)}
+          disabled={disabled || qty === 0}
+          className="h-12 flex-1 rounded-xl bg-slate-100 text-2xl font-bold text-slate-700 active:bg-slate-200 disabled:opacity-30"
+        >
+          &minus;
+        </button>
+        <span className="w-10 text-center text-2xl font-bold tabular-nums">{qty}</span>
+        <button
+          type="button"
+          onClick={() => onChange(qty + 1)}
+          disabled={disabled || atMax}
+          className="h-12 flex-1 rounded-xl bg-emerald-600 text-2xl font-bold text-white active:bg-emerald-700 disabled:opacity-30"
+        >
+          +
+        </button>
+      </div>
     </div>
   )
 }

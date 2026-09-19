@@ -8,6 +8,12 @@ export interface Ingredient {
   sort_order: number
 }
 
+export interface Category {
+  id: number
+  name: string
+  sort_order: number
+}
+
 export interface RecipeItem {
   ingredient_id: number
   qty_required: number
@@ -22,6 +28,7 @@ export interface Product {
   low_stock_threshold: number
   is_sold_out: boolean
   sort_order: number
+  category_id: number | null
   recipe: RecipeItem[]
   /** Porzioni ancora realizzabili. null = illimitato (ingredienti infiniti). */
   remaining: number | null
@@ -30,6 +37,7 @@ export interface Product {
 
 export interface AppState {
   role: Role
+  categories: Category[]
   ingredients: Ingredient[]
   products: Product[]
 }
