@@ -48,11 +48,12 @@ alter table app_pins     enable row level security;
 
 -- ---------- Helper interni (non esposti all'app) ----------
 
+-- NB: su Supabase pgcrypto vive nello schema "extensions": va incluso nel search_path.
 create or replace function _role_for_pin(p_pin text)
 returns text
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select role from app_pins
   where pin_hash = crypt(p_pin, pin_hash)
@@ -316,7 +317,7 @@ $$;
 
 create or replace function admin_set_pin(p_pin text, p_role text, p_new_pin text)
 returns void
-language plpgsql security definer set search_path = public
+language plpgsql security definer set search_path = public, extensions
 as $$
 begin
   perform _require_admin(p_pin);
@@ -349,9 +350,9 @@ grant execute on function admin_set_pin(text, text, text)                       
 -- ---------- PIN predefiniti (CAMBIALI dopo il primo accesso!) ----------
 --   viewer = 1111   editor = 2222   admin = 9999
 insert into app_pins(role, pin_hash) values
-  ('viewer', crypt('1111', gen_salt('bf'))),
-  ('editor', crypt('2222', gen_salt('bf'))),
-  ('admin',  crypt('9999', gen_salt('bf')))
+  ('viewer', extensions.crypt('1111', extensions.gen_salt('bf'))),
+  ('editor', extensions.crypt('2222', extensions.gen_salt('bf'))),
+  ('admin',  extensions.crypt('9999', extensions.gen_salt('bf')))
 on conflict (role) do nothing;
 
 -- ---------- Dati di esempio (solo se il DB è vuoto) ----------
