@@ -154,7 +154,9 @@ function ProductEditor({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const available = ingredients.filter((i) => !recipe.some((r) => r.ingredient_id === i.id))
+  const available = ingredients
+    .filter((i) => !recipe.some((r) => r.ingredient_id === i.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'it'))
 
   const addIngredient = (id: number) => setRecipe((r) => [...r, { ingredient_id: id, qty_required: 1 }])
   const updateQty = (id: number, qty: number) =>

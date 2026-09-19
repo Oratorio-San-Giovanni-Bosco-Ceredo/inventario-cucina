@@ -8,7 +8,9 @@ export default function IngredientsAdmin() {
   const [editing, setEditing] = useState<Ingredient | 'new' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const ingredients = state?.ingredients ?? []
+  const ingredients = [...(state?.ingredients ?? [])].sort((a, b) =>
+    a.name.localeCompare(b.name, 'it')
+  )
 
   const remove = async (ing: Ingredient) => {
     if (!session) return
