@@ -18,11 +18,12 @@ export function remainingLabel(product: Product): string {
 
 interface StatusMeta {
   label: string
-  /** Classi Tailwind per il badge di stato. */
+  /** Classi Tailwind per il badge di stato (pill). */
   badge: string
   /** Classi Tailwind per il bordo/sfondo della card. */
   card: string
-  icon: string
+  /** Classe Tailwind per il colore del testo di stato. */
+  text: string
 }
 
 const META: Record<ProductStatus, StatusMeta> = {
@@ -30,25 +31,25 @@ const META: Record<ProductStatus, StatusMeta> = {
     label: 'Disponibile',
     badge: 'bg-emerald-100 text-emerald-700',
     card: 'border-emerald-200',
-    icon: '',
+    text: 'text-emerald-700',
   },
   infinite: {
     label: 'Illimitato',
     badge: 'bg-sky-100 text-sky-700',
     card: 'border-sky-200',
-    icon: '∞',
+    text: 'text-sky-700',
   },
   low: {
     label: 'In esaurimento',
     badge: 'bg-amber-100 text-amber-800',
     card: 'border-amber-300 bg-amber-50',
-    icon: '⚠️',
+    text: 'text-amber-700',
   },
   sold_out: {
     label: 'Esaurito',
     badge: 'bg-red-100 text-red-700',
     card: 'border-red-300 bg-red-50 opacity-70',
-    icon: '🔴',
+    text: 'text-red-700',
   },
 }
 

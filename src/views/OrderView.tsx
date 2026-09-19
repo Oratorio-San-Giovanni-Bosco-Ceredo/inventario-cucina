@@ -135,38 +135,40 @@ function OrderCard({
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-2xl border-2 bg-white p-3 shadow-sm ${meta.card} ${
+      className={`rounded-2xl border-2 bg-white p-4 shadow-sm ${meta.card} ${
         qty > 0 ? 'ring-2 ring-emerald-400' : ''
       }`}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1">
-          <h2 className="truncate text-sm font-semibold text-slate-800">{product.name}</h2>
-          {meta.icon && <span className="text-sm">{meta.icon}</span>}
-        </div>
-        <p className="text-xs text-slate-500">
+      <h2 className="text-base font-semibold leading-snug text-slate-800">{product.name}</h2>
+
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <p className="text-sm text-slate-500">
           {formatEuro(product.price)} &middot; rim. {remainingLabel(product)}
         </p>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onChange(qty - 1)}
+            disabled={disabled || qty === 0}
+            className="h-11 w-11 rounded-xl bg-slate-100 text-2xl font-bold text-slate-700 active:bg-slate-200 disabled:opacity-30"
+          >
+            &minus;
+          </button>
+          <span className="w-8 text-center text-xl font-bold tabular-nums">{qty}</span>
+          <button
+            type="button"
+            onClick={() => onChange(qty + 1)}
+            disabled={disabled || atMax}
+            className="h-11 w-11 rounded-xl bg-emerald-600 text-2xl font-bold text-white active:bg-emerald-700 disabled:opacity-30"
+          >
+            +
+          </button>
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(qty - 1)}
-          disabled={disabled || qty === 0}
-          className="h-11 w-11 rounded-xl bg-slate-100 text-2xl font-bold text-slate-700 active:bg-slate-200 disabled:opacity-30"
-        >
-          &minus;
-        </button>
-        <span className="w-8 text-center text-xl font-bold tabular-nums">{qty}</span>
-        <button
-          type="button"
-          onClick={() => onChange(qty + 1)}
-          disabled={disabled || atMax}
-          className="h-11 w-11 rounded-xl bg-emerald-600 text-2xl font-bold text-white active:bg-emerald-700 disabled:opacity-30"
-        >
-          +
-        </button>
-      </div>
+
+      {product.status !== 'ok' && (
+        <p className={`mt-2 text-xs font-medium ${meta.text}`}>{meta.label}</p>
+      )}
     </div>
   )
 }
