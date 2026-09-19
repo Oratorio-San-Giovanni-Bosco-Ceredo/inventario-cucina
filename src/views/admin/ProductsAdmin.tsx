@@ -147,7 +147,8 @@ function ProductEditor({
   const { session, applyState } = useApp()
   const [name, setName] = useState(product?.name ?? '')
   const [price, setPrice] = useState(String(product?.price ?? 0))
-  const [threshold, setThreshold] = useState(String(product?.low_stock_threshold ?? 0))
+  // Nuovo prodotto: soglia di avviso predefinita a 10; in modifica resta il valore salvato.
+  const [threshold, setThreshold] = useState(String(product?.low_stock_threshold ?? 10))
   const [soldOut, setSoldOut] = useState(product?.is_sold_out ?? false)
   const [categoryId, setCategoryId] = useState<number | null>(product?.category_id ?? null)
   const [recipe, setRecipe] = useState<RecipeItem[]>(product?.recipe ?? [])
