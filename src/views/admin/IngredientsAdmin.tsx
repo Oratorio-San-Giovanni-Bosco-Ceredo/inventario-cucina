@@ -3,6 +3,17 @@ import { useApp } from '../../context/AppContext'
 import { deleteIngredient, upsertIngredient } from '../../lib/api'
 import type { Ingredient } from '../../lib/types'
 
+/** Soglia sotto la quale un ingrediente è considerato "in esaurimento". */
+const LOW_STOCK = 10
+
+/** Classi bordo/sfondo in base alla disponibilità dell'ingrediente. */
+function stockClass(ing: Ingredient): string {
+  if (ing.is_infinite) return 'border-sky-300 bg-sky-50'
+  if (ing.quantity <= 0) return 'border-red-400 bg-red-50'
+  if (ing.quantity < LOW_STOCK) return 'border-amber-300 bg-amber-50'
+  return 'border-slate-200 bg-white'
+}
+
 export default function IngredientsAdmin() {
   const { state, session, applyState } = useApp()
   const [editing, setEditing] = useState<Ingredient | 'new' | null>(null)
@@ -47,7 +58,7 @@ export default function IngredientsAdmin() {
           ) : (
             <li
               key={ing.id}
-              className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3"
+              className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 ${stockClass(ing)}`}
             >
               <div>
                 <p className="font-medium text-slate-800">{ing.name}</p>
