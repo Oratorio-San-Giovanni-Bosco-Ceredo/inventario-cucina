@@ -6,12 +6,28 @@ import type { Ingredient } from '../../lib/types'
 /** Soglia sotto la quale un ingrediente è considerato "in esaurimento". */
 const LOW_STOCK = 10
 
-/** Classi bordo/sfondo in base alla disponibilità dell'ingrediente. */
-function stockClass(ing: Ingredient): string {
-  if (ing.is_infinite) return 'border-sky-300 bg-sky-50'
-  if (ing.quantity <= 0) return 'border-red-400 bg-red-50'
-  if (ing.quantity < LOW_STOCK) return 'border-amber-300 bg-amber-50'
-  return 'border-slate-200 bg-white'
+interface StockMeta {
+  /** Classi bordo/sfondo della riga. */
+  row: string
+  /** Colore del testo della disponibilità. */
+  text: string
+  /** Descrizione della disponibilità. */
+  label: string
+}
+
+/** Stile e descrizione in base alla disponibilità dell'ingrediente. */
+function stockMeta(ing: Ingredient): StockMeta {
+  if (ing.is_infinite)
+    return { row: 'border-sky-500 bg-sky-50', text: 'text-sky-700', label: '∞ illimitato' }
+  if (ing.quantity <= 0)
+    return { row: 'border-red-500 bg-red-50', text: 'text-red-700', label: 'Esaurito' }
+  if (ing.quantity < LOW_STOCK)
+    return {
+      row: 'border-amber-500 bg-amber-50',
+      text: 'text-amber-700',
+      label: `${ing.quantity} disponibili · in esaurimento`,
+    }
+  return { row: 'border-slate-200 bg-white', text: 'text-slate-500', label: `${ing.quantity} disponibili` }
 }
 
 export default function IngredientsAdmin() {
@@ -58,13 +74,11 @@ export default function IngredientsAdmin() {
           ) : (
             <li
               key={ing.id}
-              className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 ${stockClass(ing)}`}
+              className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 ${stockMeta(ing).row}`}
             >
               <div>
                 <p className="font-medium text-slate-800">{ing.name}</p>
-                <p className="text-sm text-slate-500">
-                  {ing.is_infinite ? '∞ illimitato' : `${ing.quantity} disponibili`}
-                </p>
+                <p className={`text-sm font-medium ${stockMeta(ing).text}`}>{stockMeta(ing).label}</p>
               </div>
               <div className="flex gap-2">
                 <button
