@@ -1,0 +1,18 @@
+{
+  "name": "Inventario Cucina",
+  "short_name": "Inventario",
+  "description": "Gestione inventario e ordini della cucina",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
