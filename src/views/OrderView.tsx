@@ -151,7 +151,7 @@ function OrderCard({
         )}
       </div>
 
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-auto flex items-center gap-3 pt-3">
         <button
           type="button"
           onClick={() => onChange(qty - 1)}
